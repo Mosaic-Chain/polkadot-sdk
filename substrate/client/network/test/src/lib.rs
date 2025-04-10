@@ -768,8 +768,8 @@ pub trait TestNetFactory: Default + Sized + Send {
 			*genesis_extra_storage = storage;
 		}
 
-		if !config.force_genesis &&
-			matches!(config.sync_mode, SyncMode::LightState { .. } | SyncMode::Warp)
+		if !config.force_genesis
+			&& matches!(config.sync_mode, SyncMode::LightState { .. } | SyncMode::Warp { .. })
 		{
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
