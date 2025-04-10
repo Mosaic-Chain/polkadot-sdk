@@ -337,6 +337,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	import_existing: bool,
 	/// Block downloader
 	block_downloader: Arc<dyn BlockDownloader<B>>,
+	/// Whether to skip gap syncing
+	skip_gap_sync: bool,
 	/// Gap download process.
 	gap_sync: Option<GapSync<B>>,
 	/// Pending actions.
@@ -944,6 +946,7 @@ where
 		block_downloader: Arc<dyn BlockDownloader<B>>,
 		metrics_registry: Option<&Registry>,
 		initial_peers: impl Iterator<Item = (PeerId, B::Hash, NumberFor<B>)>,
+		skip_gap_sync: bool,
 	) -> Result<Self, ClientError> {
 		let mut sync = Self {
 			client,
@@ -966,6 +969,7 @@ where
 			import_existing: false,
 			block_downloader,
 			gap_sync: None,
+			skip_gap_sync,
 			actions: Vec::new(),
 			metrics: metrics_registry.and_then(|r| match Metrics::register(r) {
 				Ok(metrics) => Some(metrics),
@@ -1716,11 +1720,19 @@ where
 		if let Some(BlockGap { start, end, .. }) = info.block_gap {
 			let old_gap = self.gap_sync.take().map(|g| (g.best_queued_number, g.target));
 			debug!(target: LOG_TARGET, "Starting gap sync #{start} - #{end} (old gap best and target: {old_gap:?})");
-			self.gap_sync = Some(GapSync {
-				best_queued_number: start - One::one(),
-				target: end,
-				blocks: BlockCollection::new(),
-			});
+
+			match !self.skip_gap_sync {
+				true => {
+					self.gap_sync = Some(GapSync {
+						best_queued_number: start - One::one(),
+						target: end,
+						blocks: BlockCollection::new(),
+					});
+				},
+				false => {
+					warn!(target: LOG_TARGET, "SKIPPING GAP SYNC between {start:?} - {end:?}");
+				},
+			}
 		}
 		trace!(
 			target: LOG_TARGET,
