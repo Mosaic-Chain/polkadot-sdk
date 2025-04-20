@@ -1419,7 +1419,7 @@ where
 		match net_config.network_config.sync_mode {
 			SyncMode::LightState { .. } =>
 				return Err("Fast sync doesn't work for archive nodes".into()),
-			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Warp { .. } => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
 		}
 	}
