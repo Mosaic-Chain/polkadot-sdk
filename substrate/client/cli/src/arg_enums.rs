@@ -291,6 +291,8 @@ pub enum SyncMode {
 	FastUnsafe,
 	/// Prove finality and download the latest state.
 	Warp,
+	/// Prove finality without downloading historical blocks.
+	WarpUnsafe,
 }
 
 impl Into<sc_network::config::SyncMode> for SyncMode {
@@ -305,7 +307,8 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 				skip_proofs: true,
 				storage_chain_mode: false,
 			},
-			SyncMode::Warp => sc_network::config::SyncMode::Warp,
+			SyncMode::Warp => sc_network::config::SyncMode::Warp { download_blocks: true },
+			SyncMode::WarpUnsafe => sc_network::config::SyncMode::Warp { download_blocks: false },
 		}
 	}
 }
