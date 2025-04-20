@@ -464,7 +464,7 @@ where
 	Network: NetworkBackend<Block, <Block as BlockT>::Hash>,
 {
 	let warp_sync_config = match parachain_config.network.sync_mode {
-		SyncMode::Warp => {
+		SyncMode::Warp { .. } => {
 			log::debug!(target: LOG_TARGET_SYNC, "waiting for announce block...");
 
 			let target_block =
