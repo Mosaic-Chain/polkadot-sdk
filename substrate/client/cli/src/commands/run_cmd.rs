@@ -260,7 +260,14 @@ impl CliConfiguration for RunCmd {
 		let keyring = self.get_keyring();
 		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_authority { Role::Authority } else { Role::Full })
+		Ok(if is_authority {
+			Role::Authority
+		} else {
+			match self.network_params.sync {
+				crate::SyncMode::WarpUnsafe => Role::Light,
+				_ => Role::Full,
+			}
+		})
 	}
 
 	fn force_authoring(&self) -> Result<bool> {
