@@ -2,7 +2,7 @@
   description = "Development shell with rust and additional tooling";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/25.05";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -42,7 +42,7 @@
       LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeBuildInputs;
 
       shellHook = ''
-        cargo install --list | grep zepter > /dev/null || cargo install zepter@1.5.1
+        cargo install --list | grep zepter > /dev/null || cargo install zepter@1.82.1
         export PATH="$PATH:$HOME/.cargo/bin" 
       '';
     };
