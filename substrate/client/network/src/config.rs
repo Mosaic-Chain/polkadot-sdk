@@ -649,6 +649,9 @@ pub struct NetworkConfiguration {
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
 
+	/// Maximum number of outgoing peer connections without a known result yet.
+	pub max_pending_outgoing: u32,
+
 	/// Maximum number of blocks per request.
 	pub max_blocks_per_request: u32,
 
@@ -705,6 +708,7 @@ impl NetworkConfiguration {
 			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			idle_connection_timeout: DEFAULT_IDLE_CONNECTION_TIMEOUT,
 			max_parallel_downloads: 5,
+			max_pending_outgoing: 500,
 			max_blocks_per_request: 64,
 			min_peers_to_start_warp_sync: None,
 			sync_mode: SyncMode::Full,
