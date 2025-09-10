@@ -264,7 +264,7 @@ where
 		let FullNetworkConfiguration {
 			notification_protocols,
 			request_response_protocols,
-			mut network_config,
+			mut network_config, // boot_nodes and default_peers_set.reserved_nodes are overriden
 			..
 		} = params.network_config;
 
@@ -521,6 +521,7 @@ where
 					external_addresses.clone(),
 					network_config.public_addresses.iter().cloned().map(Into::into).collect(),
 					ConnectionLimits::default()
+						.with_max_pending_outgoing(Some(network_config.max_pending_outgoing))
 						.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
 						.with_max_established_incoming(Some(
 							crate::MAX_CONNECTIONS_ESTABLISHED_INCOMING,

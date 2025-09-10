@@ -119,6 +119,16 @@ pub struct NetworkParams {
 	#[arg(long, value_name = "COUNT", default_value_t = 5)]
 	pub max_parallel_downloads: u32,
 
+	/// Maximum number of connections initiated to peers without knowing yet if
+	/// they are available. When the limit is reached, a new peer connection can
+	/// be initiated as soon as a connection failure or success happens to a
+	/// pending one.
+	/// 
+	/// Some routers and internet providers frown upon many TCP connections
+	/// initiated in parallel and call it a SYN flood.
+	#[arg(long, value_name = "PEERS", default_value_t = 500)]
+	pub max_pending_outgoing: u32,
+
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub node_key_params: NodeKeyParams,
@@ -274,6 +284,7 @@ impl NetworkParams {
 				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			max_pending_outgoing: self.max_pending_outgoing,
 			max_blocks_per_request: self.max_blocks_per_request,
 			min_peers_to_start_warp_sync: None,
 			enable_dht_random_walk: !self.reserved_only,
