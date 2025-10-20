@@ -350,7 +350,7 @@ impl Discovery {
 				"Ignoring self-reported address of peer {peer} as remote node is not part of the \
 				 Kademlia DHT supported by the local node.",
 			);
-			return
+			return;
 		}
 
 		let addresses = addresses
@@ -362,7 +362,7 @@ impl Discovery {
 						"ignoring self-reported non-global address {address} from {peer}."
 					);
 
-					return None
+					return None;
 				}
 
 				Some(address)
@@ -475,8 +475,9 @@ impl Discovery {
 		let ip = match address.iter().next() {
 			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
 			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
-			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) =>
-				return true,
+			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => {
+				return true
+			},
 			_ => return false,
 		};
 
@@ -510,7 +511,7 @@ impl Discovery {
 			.chain(self.public_addresses.iter())
 			.any(|known_address| Discovery::is_known_address(&known_address, &address))
 		{
-			return (true, None)
+			return (false, None);
 		}
 
 		match self.address_confirmations.get(address) {
@@ -518,16 +519,16 @@ impl Discovery {
 				confirmations.insert(peer);
 
 				if confirmations.len() >= MIN_ADDRESS_CONFIRMATIONS {
-					return (true, None)
+					return (true, None);
 				}
 			},
 			None => {
-				let oldest = (self.address_confirmations.len() >=
-					self.address_confirmations.limiter().max_length() as usize)
+				let oldest = (self.address_confirmations.len()
+					>= self.address_confirmations.limiter().max_length() as usize)
 					.then(|| {
 						self.address_confirmations.pop_oldest().map(|(address, peers)| {
 							if peers.len() >= MIN_ADDRESS_CONFIRMATIONS {
-								return Some(address)
+								return Some(address);
 							} else {
 								None
 							}
@@ -538,7 +539,7 @@ impl Discovery {
 
 				self.address_confirmations.insert(address.clone(), iter::once(peer).collect());
 
-				return (false, oldest)
+				return (false, oldest);
 			},
 		}
 
@@ -553,7 +554,7 @@ impl Stream for Discovery {
 		let this = Pin::into_inner(self);
 
 		if let Some(event) = this.pending_events.pop_front() {
-			return Poll::Ready(Some(event))
+			return Poll::Ready(Some(event));
 		}
 
 		if let Some(mut delay) = this.next_kad_query.take() {
@@ -569,7 +570,7 @@ impl Stream for Discovery {
 					match this.kademlia_handle.try_find_node(peer) {
 						Ok(query_id) => {
 							this.random_walk_query_id = Some(query_id);
-							return Poll::Ready(Some(DiscoveryEvent::RandomKademliaStarted))
+							return Poll::Ready(Some(DiscoveryEvent::RandomKademliaStarted));
 						},
 						Err(()) => {
 							this.duration_to_next_find_query = cmp::min(
@@ -599,7 +600,7 @@ impl Stream for Discovery {
 
 				return Poll::Ready(Some(DiscoveryEvent::RoutingTableUpdate {
 					peers: peers.into_iter().map(|(peer, _)| peer).collect(),
-				}))
+				}));
 			},
 			Poll::Ready(Some(KademliaEvent::FindNodeSuccess { query_id, target, peers })) => {
 				log::trace!(target: LOG_TARGET, "find node query yielded {} peers", peers.len());
@@ -608,14 +609,14 @@ impl Stream for Discovery {
 					query_id,
 					target,
 					peers,
-				}))
+				}));
 			},
 			Poll::Ready(Some(KademliaEvent::RoutingTableUpdate { peers })) => {
 				log::trace!(target: LOG_TARGET, "routing table update, discovered {} peers", peers.len());
 
 				return Poll::Ready(Some(DiscoveryEvent::RoutingTableUpdate {
 					peers: peers.into_iter().collect(),
-				}))
+				}));
 			},
 			Poll::Ready(Some(KademliaEvent::GetRecordSuccess { query_id })) => {
 				log::trace!(
@@ -636,8 +637,9 @@ impl Stream for Discovery {
 					record,
 				}));
 			},
-			Poll::Ready(Some(KademliaEvent::PutRecordSuccess { query_id, key: _ })) =>
-				return Poll::Ready(Some(DiscoveryEvent::PutRecordSuccess { query_id })),
+			Poll::Ready(Some(KademliaEvent::PutRecordSuccess { query_id, key: _ })) => {
+				return Poll::Ready(Some(DiscoveryEvent::PutRecordSuccess { query_id }))
+			},
 			Poll::Ready(Some(KademliaEvent::QueryFailed { query_id })) => {
 				match this.random_walk_query_id == Some(query_id) {
 					true => {
@@ -657,7 +659,7 @@ impl Stream for Discovery {
 					record.publisher,
 				);
 
-				return Poll::Ready(Some(DiscoveryEvent::IncomingRecord { record }))
+				return Poll::Ready(Some(DiscoveryEvent::IncomingRecord { record }));
 			},
 			Poll::Ready(Some(KademliaEvent::GetProvidersSuccess {
 				provided_key,
@@ -672,7 +674,7 @@ impl Stream for Discovery {
 				return Poll::Ready(Some(DiscoveryEvent::GetProvidersSuccess {
 					query_id,
 					providers,
-				}))
+				}));
 			},
 			// We do not validate incoming providers.
 			Poll::Ready(Some(KademliaEvent::IncomingProvider { .. })) => {},
@@ -738,16 +740,18 @@ impl Stream for Discovery {
 		match Pin::new(&mut this.ping_event_stream).poll_next(cx) {
 			Poll::Pending => {},
 			Poll::Ready(None) => return Poll::Ready(None),
-			Poll::Ready(Some(PingEvent::Ping { peer, ping })) =>
-				return Poll::Ready(Some(DiscoveryEvent::Ping { peer, rtt: ping })),
+			Poll::Ready(Some(PingEvent::Ping { peer, ping })) => {
+				return Poll::Ready(Some(DiscoveryEvent::Ping { peer, rtt: ping }))
+			},
 		}
 
 		if let Some(ref mut mdns_event_stream) = &mut this.mdns_event_stream {
 			match Pin::new(mdns_event_stream).poll_next(cx) {
 				Poll::Pending => {},
 				Poll::Ready(None) => return Poll::Ready(None),
-				Poll::Ready(Some(MdnsEvent::Discovered(addresses))) =>
-					return Poll::Ready(Some(DiscoveryEvent::Discovered { addresses })),
+				Poll::Ready(Some(MdnsEvent::Discovered(addresses))) => {
+					return Poll::Ready(Some(DiscoveryEvent::Discovered { addresses }))
+				},
 			}
 		}
 
@@ -873,7 +877,7 @@ mod tests {
 					// We need to keep the network alive until all peers are discovered.
 					if num_finished.load(std::sync::atomic::Ordering::Relaxed) == total_peers {
 						log::info!(target: LOG_TARGET, "{peer_id:?} all peers discovered");
-						break
+						break;
 					}
 
 					tokio::select! {

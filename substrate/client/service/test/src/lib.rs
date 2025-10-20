@@ -181,7 +181,7 @@ where
 				interval.tick().await;
 
 				if full_nodes.iter().all(|(id, service, _, _)| full_predicate(*id, service)) {
-					break
+					break;
 				}
 			}
 		};
@@ -223,7 +223,7 @@ fn node_config<E: ChainSpecExtension + Clone + 'static + Send + Sync>(
 	);
 
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
+		TransportConfig::Normal { enable_mdns: false, allowed_private_ips: Some(Vec::new()) };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),

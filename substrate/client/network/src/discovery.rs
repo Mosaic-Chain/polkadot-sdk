@@ -49,6 +49,7 @@
 use crate::{config::ProtocolId, utils::LruHashSet};
 
 use array_bytes::bytes2hex;
+use either::Either;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -79,6 +80,7 @@ use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
 	collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+	net::IpAddr,
 	num::NonZeroUsize,
 	task::{Context, Poll},
 	time::{Duration, Instant},
@@ -112,7 +114,7 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	permanent_addresses: Vec<(PeerId, Multiaddr)>,
 	dht_random_walk: bool,
-	allow_private_ip: bool,
+	allowed_private_ips: Option<Vec<IpNetwork>>,
 	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
@@ -129,7 +131,7 @@ impl DiscoveryConfig {
 			local_peer_id,
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
-			allow_private_ip: true,
+			allowed_private_ips: Some(Vec::new()),
 			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
@@ -164,8 +166,11 @@ impl DiscoveryConfig {
 	}
 
 	/// Should private IPv4/IPv6 addresses be reported?
-	pub fn allow_private_ip(&mut self, value: bool) -> &mut Self {
-		self.allow_private_ip = value;
+	/// - `None``: no
+	/// - `Some(Vec::new())`: all
+	/// - `Some(cidrs)`: just those matching the given networks
+	pub fn allowed_private_ips(&mut self, value: Option<Vec<IpNetwork>>) -> &mut Self {
+		self.allowed_private_ips = value;
 		self
 	}
 
@@ -215,7 +220,7 @@ impl DiscoveryConfig {
 			local_peer_id,
 			permanent_addresses,
 			dht_random_walk,
-			allow_private_ip,
+			allowed_private_ips,
 			allow_non_globals_in_dht,
 			discovery_only_if_under_num,
 			enable_mdns,
@@ -265,7 +270,7 @@ impl DiscoveryConfig {
 			pending_events: VecDeque::new(),
 			local_peer_id,
 			num_connections: 0,
-			allow_private_ip,
+			allowed_private_ips,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match TokioMdns::new(mdns::Config::default(), local_peer_id) {
@@ -314,9 +319,11 @@ pub struct DiscoveryBehaviour {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
-	/// ones stored in `permanent_addresses` or `ephemeral_addresses`.
-	allow_private_ip: bool,
+	/// If None, `addresses_of_peer` won't return any private IPv4/IPv6 address, except for the
+	/// ones stored in `permanent_addresses` or `ephemeral_addresses`. If Some and empty, all
+	/// private addresses are allowed. If Some and non-empty, only addresses in the given
+	/// networks will be used.
+	allowed_private_ips: Option<Vec<IpNetwork>>,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
 	/// Should non-global addresses be added to the DHT?
@@ -362,7 +369,7 @@ impl DiscoveryBehaviour {
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		let addrs_list = self.ephemeral_addresses.entry(peer_id).or_default();
 		if addrs_list.contains(&addr) {
-			return
+			return;
 		}
 
 		if let Some(k) = self.kademlia.as_mut() {
@@ -390,7 +397,7 @@ impl DiscoveryBehaviour {
 					target: LOG_TARGET,
 					"Ignoring self-reported non-global address {} from {}.", addr, peer_id
 				);
-				return
+				return;
 			}
 
 			// The supported protocols must include the chain-based Kademlia protocol.
@@ -409,7 +416,7 @@ impl DiscoveryBehaviour {
 					"Ignoring self-reported address {} from {} as remote node is not part of the \
 					 Kademlia DHT supported by the local node.", addr, peer_id,
 				);
-				return
+				return;
 			}
 
 			trace!(
@@ -566,11 +573,40 @@ impl DiscoveryBehaviour {
 		let ip = match addr.iter().next() {
 			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
 			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
-			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) =>
-				return true,
+			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => {
+				return true
+			},
 			_ => return false,
 		};
 		ip.is_global()
+	}
+
+	fn private_ip_filter(&self) -> Option<Box<dyn Fn(IpAddr) -> bool + '_>> {
+		match &self.allowed_private_ips {
+			None => Some(Box::new(|_| false)),
+			Some(cidrs) if cidrs.is_empty() => None,
+			Some(cidrs) => Some(Box::new(|address| cidrs.iter().any(|n| n.contains(address)))),
+		}
+	}
+
+	fn filter_private_ips<'a>(
+		&self,
+		addrs: &'a [Multiaddr],
+	) -> impl Iterator<Item = &'a Multiaddr> + use<'a, '_> {
+		let Some(addr_filter) = self.private_ip_filter() else {
+			return Either::Left(addrs.iter());
+		};
+
+		let allowed = addrs.iter().filter(move |addr| match addr.iter().next() {
+			Some(Protocol::Ip4(addr)) => {
+				IpNetwork::from(addr).is_global() || (*addr_filter)(IpAddr::from(addr))
+			},
+			Some(Protocol::Ip6(addr)) => {
+				IpNetwork::from(addr).is_global() || (*addr_filter)(IpAddr::from(addr))
+			},
+			_ => true,
+		});
+		Either::Right(allowed)
 	}
 }
 
@@ -718,31 +754,25 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			});
 		}
 
+		let addresses = self.filter_private_ips(addresses).cloned().collect::<Vec<_>>();
+
 		{
 			let mut list_to_filter = self.kademlia.handle_pending_outbound_connection(
 				connection_id,
 				maybe_peer,
-				addresses,
+				&addresses,
 				effective_role,
 			)?;
 
 			list_to_filter.extend(self.mdns.handle_pending_outbound_connection(
 				connection_id,
 				maybe_peer,
-				addresses,
+				&addresses,
 				effective_role,
 			)?);
 
-			if !self.allow_private_ip {
-				list_to_filter.retain(|addr| match addr.iter().next() {
-					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
-					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
-					_ => true,
-				});
-			}
-
-			list_to_filter.into_iter().for_each(|address| {
-				list.insert_if_absent(address);
+			self.filter_private_ips(&list_to_filter).for_each(|address| {
+				list.insert_if_absent(address.clone());
 			});
 		}
 
@@ -819,7 +849,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							"🔍 Discovered external address for a peer that is not us: {addr}",
 						);
 						// Ensure this address is not propagated to kademlia.
-						return
+						return;
 					}
 				} else {
 					address.push(Protocol::P2p(self.local_peer_id));
@@ -862,7 +892,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn poll(&mut self, cx: &mut Context) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
-			return Poll::Ready(ToSwarm::GenerateEvent(ev))
+			return Poll::Ready(ToSwarm::GenerateEvent(ev));
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
@@ -896,7 +926,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 					if actually_started {
 						let ev = DiscoveryOut::RandomKademliaStarted;
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					}
 				}
 			}
@@ -907,11 +937,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				ToSwarm::GenerateEvent(ev) => match ev {
 					KademliaEvent::RoutingUpdated { peer, .. } => {
 						let ev = DiscoveryOut::Discovered(peer);
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::UnroutablePeer { peer, .. } => {
 						let ev = DiscoveryOut::UnroutablePeer(peer);
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::RoutablePeer { .. } => {
 						// Generate nothing, because the address was not added to the routing table,
@@ -921,7 +951,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						// We are not interested in this event at the moment.
 					},
 					KademliaEvent::InboundRequest { request } => match request {
-						libp2p::kad::InboundRequest::PutRecord { record: Some(record), .. } =>
+						libp2p::kad::InboundRequest::PutRecord { record: Some(record), .. } => {
 							return Poll::Ready(ToSwarm::GenerateEvent(
 								DiscoveryOut::PutRecordRequest(
 									record.key,
@@ -929,7 +959,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									record.publisher.map(Into::into),
 									record.expires,
 								),
-							)),
+							))
+						},
 						_ => {},
 					},
 					KademliaEvent::OutboundQueryProgressed {
@@ -951,7 +982,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									 a peer ID: {:?}",
 									HexDisplay::from(&key),
 								);
-								continue
+								continue;
 							},
 						};
 
@@ -982,7 +1013,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							)
 						};
 
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetRecord(res),
@@ -1034,7 +1065,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								// We always need to remove the record to not leak any data!
 								if let Some(record) = self.records_to_publish.remove(&id) {
 									if cache_candidates.is_empty() {
-										continue
+										continue;
 									}
 
 									// Put the record to the `cache_candidates` that are nearest to
@@ -1048,7 +1079,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									}
 								}
 
-								continue
+								continue;
 							},
 							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(
@@ -1073,7 +1104,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetProviders(res),
@@ -1119,7 +1150,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										target: LOG_TARGET,
 										"No key found for `GET_PROVIDERS` query {id:?}. This is a bug.",
 									);
-									continue
+									continue;
 								}
 							},
 							Err(GetProvidersError::Timeout { key, closest_peers: _ }) => {
@@ -1136,7 +1167,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::PutRecord(res),
@@ -1165,7 +1196,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::RepublishRecord(res),
@@ -1212,7 +1243,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(ToSwarm::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev));
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::Bootstrap(res),
@@ -1250,14 +1281,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				ToSwarm::GenerateEvent(event) => match event {
 					mdns::Event::Discovered(list) => {
 						if self.num_connections >= self.discovery_only_if_under_num {
-							continue
+							continue;
 						}
 
 						self.pending_events.extend(
 							list.into_iter().map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)),
 						);
 						if let Some(ev) = self.pending_events.pop_front() {
-							return Poll::Ready(ToSwarm::GenerateEvent(ev))
+							return Poll::Ready(ToSwarm::GenerateEvent(ev));
 						}
 					},
 					mdns::Event::Expired(_) => {},
@@ -1352,7 +1383,7 @@ mod tests {
 						let mut config = DiscoveryConfig::new(keypair.public().to_peer_id());
 						config
 							.with_permanent_addresses(first_swarm_peer_id_and_addr.clone())
-							.allow_private_ip(true)
+							.allow_private_ip(Some(Vec::new()))
 							.allow_non_globals_in_dht(true)
 							.discovery_limit(50)
 							.with_kademlia(genesis_hash, fork_id, &protocol_id);
@@ -1399,8 +1430,8 @@ mod tests {
 							match e {
 								SwarmEvent::Behaviour(behavior) => {
 									match behavior {
-										DiscoveryOut::UnroutablePeer(other) |
-										DiscoveryOut::Discovered(other) => {
+										DiscoveryOut::UnroutablePeer(other)
+										| DiscoveryOut::Discovered(other) => {
 											// Call `add_self_reported_address` to simulate identify
 											// happening.
 											let addr = swarms
@@ -1447,12 +1478,12 @@ mod tests {
 								// ignore non Behaviour events
 								_ => {},
 							}
-							continue 'polling
+							continue 'polling;
 						},
 						_ => {},
 					}
 				}
-				break
+				break;
 			}
 
 			if to_discover.iter().all(|l| l.is_empty()) {
@@ -1476,7 +1507,7 @@ mod tests {
 			let keypair = Keypair::generate_ed25519();
 			let mut config = DiscoveryConfig::new(keypair.public().to_peer_id());
 			config
-				.allow_private_ip(true)
+				.allowed_private_ips(Some(Vec::new()))
 				.allow_non_globals_in_dht(true)
 				.discovery_limit(50)
 				.with_kademlia(supported_genesis_hash, None, &supported_protocol_id);

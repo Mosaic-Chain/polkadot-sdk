@@ -59,6 +59,11 @@ pub fn parse_ss58_address_format(x: &str) -> Result<Ss58AddressFormat, String> {
 	}
 }
 
+/// Parse `IpNetwork` from arguments (aka CIDR)
+fn parse_cidr(s: &str) -> Result<IpNetwork, String> {
+    IpNetwork::from_str(s).map_err(|e| format!("invalid CIDR '{s}': {e}"))
+}
+
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a
 /// decimal.
 #[derive(Debug, Clone)]

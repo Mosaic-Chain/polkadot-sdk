@@ -495,15 +495,15 @@ where
 				match network_config.transport {
 					TransportConfig::MemoryOnly => {
 						config.with_mdns(false);
-						config.allow_private_ip(false);
+						config.allowed_private_ips(None);
 					},
 					TransportConfig::Normal {
 						enable_mdns,
-						allow_private_ip: allow_private_ipv4,
+						allowed_private_ips,
 						..
 					} => {
 						config.with_mdns(enable_mdns);
-						config.allow_private_ip(allow_private_ipv4);
+						config.allowed_private_ips(allowed_private_ips);
 					},
 				}
 

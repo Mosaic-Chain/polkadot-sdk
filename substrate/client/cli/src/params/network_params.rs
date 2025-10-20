@@ -18,7 +18,7 @@
 
 use crate::{
 	arg_enums::{NetworkBackendType, SyncMode},
-	params::node_key_params::NodeKeyParams,
+	params::{IpNetwork, parse_cidr, node_key_params::NodeKeyParams},
 };
 use clap::Args;
 use sc_network::{
@@ -90,8 +90,8 @@ pub struct NetworkParams {
 	///
 	/// Address allocation for private networks is specified by
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)).
-	#[arg(long, alias = "allow-private-ipv4", conflicts_with_all = &["no_private_ip"])]
-	pub allow_private_ip: bool,
+	#[arg(long, alias = "allow-private-ipv4", num_args = 0.., require_equals = false, value_name = "CIDR", value_parser = parse_cidr, default_missing_value = None, conflicts_with_all = &["no_private_ip"])]
+	pub allow_private_ip: Option<Vec<IpNetwork>>,
 
 	/// Number of outgoing connections we're trying to maintain.
 	#[arg(long, value_name = "COUNT", default_value_t = 8)]
@@ -252,12 +252,14 @@ impl NetworkParams {
 			self.discover_local ||
 				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
-		let allow_private_ip = match (self.allow_private_ip, self.no_private_ip) {
-			(true, true) => unreachable!("`*_private_ip` flags are mutually exclusive; qed"),
-			(true, false) => true,
-			(false, true) => false,
-			(false, false) =>
-				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+		let allowed_private_ips = match (&self.allow_private_ip, self.no_private_ip) {
+			(Some(_), true) => unreachable!("`*_private_ip` flags are mutually exclusive; qed"),
+			(Some(cidrs), false) => Some(cidrs.iter().copied().collect()),
+			(None, true) => None,
+			(None, false) => {
+				let default_allow_private = is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
+				default_allow_private.then_some(Vec::new())
+			}
 		};
 
 		NetworkConfiguration {
@@ -281,7 +283,7 @@ impl NetworkParams {
 			client_version: client_id.to_string(),
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
-				allow_private_ip,
+				allowed_private_ips,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			max_pending_outgoing: self.max_pending_outgoing,
