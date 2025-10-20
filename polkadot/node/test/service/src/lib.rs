@@ -105,10 +105,12 @@ pub fn new_full<OverseerGenerator: OverseerGen>(
 	};
 
 	match config.network.network_backend {
-		sc_network::config::NetworkBackendType::Libp2p =>
-			polkadot_service::new_full::<_, sc_network::NetworkWorker<_, _>>(config, params),
-		sc_network::config::NetworkBackendType::Litep2p =>
-			polkadot_service::new_full::<_, sc_network::Litep2pNetworkBackend>(config, params),
+		sc_network::config::NetworkBackendType::Libp2p => {
+			polkadot_service::new_full::<_, sc_network::NetworkWorker<_, _>>(config, params)
+		},
+		sc_network::config::NetworkBackendType::Litep2p => {
+			polkadot_service::new_full::<_, sc_network::Litep2pNetworkBackend>(config, params)
+		},
 	}
 }
 
@@ -171,7 +173,7 @@ pub fn node_config(
 	network_config.listen_addresses.push(addr.clone());
 	network_config.public_addresses.push(addr);
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
+		TransportConfig::Normal { enable_mdns: false, allowed_private_ips: Some(Vec::new()) };
 
 	Configuration {
 		impl_name: "polkadot-test-node".to_string(),
@@ -395,7 +397,7 @@ impl PolkadotTestNode {
 		while let Some(notification) = import_notification_stream.next().await {
 			blocks.insert(notification.hash);
 			if blocks.len() == count {
-				break
+				break;
 			}
 		}
 	}
