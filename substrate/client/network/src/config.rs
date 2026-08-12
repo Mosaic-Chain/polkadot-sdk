@@ -46,6 +46,7 @@ use crate::{
 	webrtc,
 };
 use codec::Encode;
+use ip_network::IpNetwork;
 use prometheus_endpoint::Registry;
 use zeroize::Zeroize;
 
@@ -280,10 +281,11 @@ pub enum TransportConfig {
 		/// and connect to them if they support the same chain.
 		enable_mdns: bool,
 
-		/// If true, allow connecting to private IPv4/IPv6 addresses (as defined in
-		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// If set, allows connecting to the private IPv4/IPv6 addresses (as defined in
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)) matching the CIDR value inside.
+		/// Irrelevant for addresses that have
 		/// been passed in `::sc_network::config::NetworkConfiguration::boot_nodes`.
-		allow_private_ip: bool,
+		allowed_private_ips: Option<Vec<IpNetwork>>,
 	},
 
 	/// Only allow connections within the same process.
@@ -719,8 +721,11 @@ impl NetworkConfiguration {
 			default_peers_set,
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			idle_connection_timeout: DEFAULT_IDLE_CONNECTION_TIMEOUT,
+			transport: TransportConfig::Normal {
+				enable_mdns: false,
+				allowed_private_ips: Some(Vec::new()),
+			},
 			max_parallel_downloads: 5,
 			max_pending_outgoing: 500,
 			max_blocks_per_request: 64,

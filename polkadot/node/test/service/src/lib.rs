@@ -175,7 +175,7 @@ pub fn node_config(
 	network_config.listen_addresses.push(addr.clone());
 	network_config.public_addresses.push(addr);
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
+		TransportConfig::Normal { enable_mdns: false, allowed_private_ips: Some(Vec::new()) };
 
 	Configuration {
 		impl_name: "polkadot-test-node".to_string(),
