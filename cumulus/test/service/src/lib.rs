@@ -812,7 +812,7 @@ pub fn node_config(
 	let addr: multiaddr::Multiaddr = "/ip4/127.0.0.1/tcp/0".parse().expect("valid address; qed");
 	network_config.listen_addresses.push(addr.clone());
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
+		TransportConfig::Normal { enable_mdns: false, allowed_private_ips: Some(Vec::new()) };
 
 	Ok(Configuration {
 		impl_name: "cumulus-test-node".to_string(),

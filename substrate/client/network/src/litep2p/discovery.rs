@@ -543,7 +543,7 @@ impl Discovery {
 			.chain(self.public_addresses.iter())
 			.any(|known_address| Discovery::is_known_address(&known_address, &address))
 		{
-			return (true, None);
+return (false, None);
 		}
 
 		match self.address_confirmations.get(address) {
@@ -555,8 +555,8 @@ impl Discovery {
 				}
 			},
 			None => {
-				let oldest = (self.address_confirmations.len() >=
-					self.address_confirmations.limiter().max_length() as usize)
+				let oldest = (self.address_confirmations.len()
+					>= self.address_confirmations.limiter().max_length() as usize)
 					.then(|| {
 						self.address_confirmations.pop_oldest().map(|(address, peers)| {
 							if peers.len() >= MIN_ADDRESS_CONFIRMATIONS {

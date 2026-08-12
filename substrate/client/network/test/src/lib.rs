@@ -1115,8 +1115,8 @@ pub trait TestNetFactory: Default + Sized + Send {
 		let peers = self.peers_mut();
 
 		for peer in peers {
-			if peer.sync_service.is_major_syncing() ||
-				peer.sync_service.status().await.unwrap().queued_blocks != 0
+			if peer.sync_service.is_major_syncing()
+				|| peer.sync_service.status().await.unwrap().queued_blocks != 0
 			{
 				return false;
 			}
