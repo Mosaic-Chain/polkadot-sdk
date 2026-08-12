@@ -298,6 +298,8 @@ pub enum SyncMode {
 	/// blocks (unless `blocks-pruning` is set to archive mode). This saves bandwidth while still
 	/// allowing the node to serve as a warp sync source for other nodes.
 	Warp,
+	/// Prove finality without downloading historical blocks.
+	WarpUnsafe,
 }
 
 impl Into<sc_network::config::SyncMode> for SyncMode {
@@ -312,7 +314,8 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 				skip_proofs: true,
 				storage_chain_mode: false,
 			},
-			SyncMode::Warp => sc_network::config::SyncMode::Warp,
+			SyncMode::Warp => sc_network::config::SyncMode::Warp { download_blocks: true },
+			SyncMode::WarpUnsafe => sc_network::config::SyncMode::Warp { download_blocks: false },
 		}
 	}
 }

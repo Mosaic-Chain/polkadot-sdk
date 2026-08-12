@@ -50,7 +50,14 @@ fn chain_sync_mode(sync_mode: SyncMode) -> ChainSyncMode {
 		SyncMode::LightState { skip_proofs, storage_chain_mode } => {
 			ChainSyncMode::LightState { skip_proofs, storage_chain_mode }
 		},
-		SyncMode::Warp => ChainSyncMode::Full,
+SyncMode::Warp { .. } => ChainSyncMode::Full,
+	}
+}
+
+fn skip_gap_sync(sync_mode: SyncMode) -> bool {
+	match sync_mode {
+		SyncMode::Warp { download_blocks: false } => true,
+		_ => false,
 	}
 }
 
@@ -361,7 +368,7 @@ where
 			config.max_blocks_per_request = MAX_BLOCKS_IN_RESPONSE as u32;
 		}
 
-		if let SyncMode::Warp = config.mode {
+		if let SyncMode::Warp { .. } = config.mode {
 			let warp_sync_config = warp_sync_config
 				.expect("Warp sync configuration must be supplied in warp sync mode.");
 			let warp_sync = WarpSync::new(
@@ -390,7 +397,7 @@ where
 				config.archive_blocks,
 				config.metrics_registry.as_ref(),
 				std::iter::empty(),
-				false,
+				skip_gap_sync(config.mode),
 			)?;
 			Ok(Self {
 				config,
@@ -446,7 +453,7 @@ where
 						self.peer_best_blocks.iter().map(|(peer_id, (best_hash, best_number))| {
 							(*peer_id, *best_hash, *best_number)
 						}),
-						true,
+						skip_gap_sync(self.config.mode),
 					) {
 						Ok(chain_sync) => chain_sync,
 						Err(e) => {
@@ -478,7 +485,7 @@ where
 				self.peer_best_blocks.iter().map(|(peer_id, (best_hash, best_number))| {
 					(*peer_id, *best_hash, *best_number)
 				}),
-				true,
+				skip_gap_sync(self.config.mode),
 			) {
 				Ok(chain_sync) => chain_sync,
 				Err(e) => {
