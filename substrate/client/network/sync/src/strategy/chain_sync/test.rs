@@ -1422,6 +1422,7 @@ fn gap_sync_body_request_depends_on_pruning_mode() {
 			archive_blocks,
 			None,
 			std::iter::empty(),
+			false,
 		)
 		.unwrap();
 
@@ -1482,6 +1483,7 @@ fn regular_sync_always_requests_bodies_regardless_of_pruning() {
 			archive_blocks,
 			None,
 			std::iter::empty(),
+			false,
 		)
 		.unwrap();
 
@@ -1558,6 +1560,7 @@ fn no_ancestry_search_during_major_sync() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 

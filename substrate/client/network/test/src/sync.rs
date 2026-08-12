@@ -1256,7 +1256,7 @@ async fn warp_sync_gap_sync_requests_bodies_if_archive_node() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+		sync_mode: SyncMode::Warp { download_blocks: true },
 		blocks_pruning: None, // Archive mode, gap sync expected to request bodies too
 		..Default::default()
 	});
