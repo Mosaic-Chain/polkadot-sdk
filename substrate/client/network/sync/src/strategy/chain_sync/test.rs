@@ -96,6 +96,7 @@ fn processes_empty_response_on_justification_request_for_unknown_block() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -162,6 +163,7 @@ fn restart_doesnt_affect_peers_downloading_finality_data() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -213,9 +215,9 @@ fn restart_doesnt_affect_peers_downloading_finality_data() {
 	// the justification request should be scheduled to the
 	// new peer which is at the given block
 	assert!(sync.justification_requests().iter().any(|(p, r)| {
-		*p == peer_id3 &&
-			r.fields == BlockAttributes::JUSTIFICATION &&
-			r.from == FromBlock::Hash(b1_hash)
+		*p == peer_id3
+			&& r.fields == BlockAttributes::JUSTIFICATION
+			&& r.from == FromBlock::Hash(b1_hash)
 	}));
 
 	assert_eq!(
@@ -372,6 +374,7 @@ fn do_ancestor_search_when_common_block_to_best_queued_gap_is_to_big() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -547,6 +550,7 @@ fn can_sync_huge_fork() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -703,6 +707,7 @@ fn syncs_fork_without_duplicate_requests() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -859,6 +864,7 @@ fn removes_target_fork_on_disconnect() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -895,6 +901,7 @@ fn can_import_response_with_missing_blocks() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -937,6 +944,7 @@ fn sync_restart_removes_block_but_not_justification_requests() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -1090,6 +1098,7 @@ fn request_across_forks() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -1199,6 +1208,7 @@ fn sync_verification_failed_with_gap_filled() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 
@@ -1338,6 +1348,7 @@ fn sync_gap_filled_regardless_of_blocks_origin() {
 		false,
 		None,
 		std::iter::empty(),
+		false,
 	)
 	.unwrap();
 

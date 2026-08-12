@@ -44,9 +44,9 @@ async fn sync_peers_works() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 
-	while net.peer(0).num_peers().await != 2 &&
-		net.peer(1).num_peers().await != 2 &&
-		net.peer(2).num_peers().await != 2
+	while net.peer(0).num_peers().await != 2
+		&& net.peer(1).num_peers().await != 2
+		&& net.peer(2).num_peers().await != 2
 	{
 		futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -280,13 +280,13 @@ async fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justifications(hashes[height - 1]).unwrap() !=
-				Some(Justifications::from((*b"FRNK", Vec::new())))
+			if net.peer(0).client().justifications(hashes[height - 1]).unwrap()
+				!= Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
 				return Poll::Pending;
 			}
-			if net.peer(1).client().justifications(hashes[height - 1]).unwrap() !=
-				Some(Justifications::from((*b"FRNK", Vec::new())))
+			if net.peer(1).client().justifications(hashes[height - 1]).unwrap()
+				!= Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
 				return Poll::Pending;
 			}
@@ -320,10 +320,10 @@ async fn sync_justifications_across_forks() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justifications(f1_best).unwrap() ==
-			Some(Justifications::from((*b"FRNK", Vec::new()))) &&
-			net.peer(1).client().justifications(f1_best).unwrap() ==
-				Some(Justifications::from((*b"FRNK", Vec::new())))
+		if net.peer(0).client().justifications(f1_best).unwrap()
+			== Some(Justifications::from((*b"FRNK", Vec::new())))
+			&& net.peer(1).client().justifications(f1_best).unwrap()
+				== Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			Poll::Ready(())
 		} else {
@@ -896,9 +896,9 @@ async fn block_announce_data_is_propagated() {
 	});
 
 	// Wait until peer 1 is connected to both nodes.
-	while net.peer(1).num_peers().await != 2 ||
-		net.peer(0).num_peers().await != 1 ||
-		net.peer(2).num_peers().await != 1
+	while net.peer(1).num_peers().await != 2
+		|| net.peer(0).num_peers().await != 1
+		|| net.peer(2).num_peers().await != 1
 	{
 		futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -1000,8 +1000,8 @@ async fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(1).client().justifications(hashof10).unwrap() !=
-			Some(Justifications::from((*b"FRNK", Vec::new())))
+		if net.peer(1).client().justifications(hashof10).unwrap()
+			!= Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			return Poll::Pending;
 		}
@@ -1020,7 +1020,7 @@ async fn syncs_all_forks_from_single_peer() {
 
 	net.run_until_connected().await;
 
-	let mut branch1 = None;
+let mut branch1 = None;
 	for i in 0..2 {
 		let at = if i == 0 { BlockId::Number(10) } else { BlockId::Hash(branch1.unwrap()) };
 		branch1 = net.peer(0).push_blocks_at(at, 1, i == 0).pop();
@@ -1203,7 +1203,7 @@ async fn warp_sync_gap_sync_skips_bodies_if_blocks_pruning() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+sync_mode: SyncMode::Warp { download_blocks: true },
 		blocks_pruning: Some(256), // Pruning enabled, gap sync expected to not request bodies
 		..Default::default()
 	});
@@ -1305,7 +1305,7 @@ async fn warp_sync_failover_to_full_sync() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+		sync_mode: SyncMode::Warp { download_blocks: true },
 		// We want some finalized state in the DB to make warp sync impossible.
 		force_genesis: true,
 		..Default::default()
@@ -1341,7 +1341,7 @@ async fn warp_sync_to_target_block() {
 	let target_block = net.peer(0).client.header(target).unwrap().unwrap();
 
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+sync_mode: SyncMode::Warp { download_blocks: true },
 		blocks_pruning: Some(256),
 		target_header: Some(target_block),
 		..Default::default()
